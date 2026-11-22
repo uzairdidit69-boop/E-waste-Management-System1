@@ -1,6 +1,7 @@
 # app/db.py
 """Async SQLAlchemy engine and session factory for the E-Waste Management System."""
 
+import logging
 import urllib.parse
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -8,6 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
 from .config import settings
+
+logger = logging.getLogger("ecotrack")
 
 
 def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any], type]:
@@ -17,6 +20,10 @@ def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any], type]:
     - Sets SSL to 'require' and disables statement cache for PgBouncer / Neon pooling.
     - Uses NullPool for serverless PostgreSQL and file SQLite; StaticPool for in-memory SQLite.
     """
+    if not raw_url:
+        logger.warning("DATABASE_URL is empty; falling back to temporary in-memory SQLite engine")
+        return "sqlite+aiosqlite:///:memory:", {}, StaticPool
+
     url = raw_url
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -35,7 +42,6 @@ def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any], type]:
         connect_args = {
             "ssl": "require",
             "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
         }
 
     pool_class: type = StaticPool if ":memory:" in url else NullPool
@@ -65,3 +71,4 @@ async def get_db():
     """FastAPI dependency that yields an async DB session."""
     async with AsyncSessionLocal() as session:
         yield session
+
