@@ -30,6 +30,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Encode a JWT with an expiry claim."""
+    if not settings.JWT_SECRET:
+        raise RuntimeError("JWT_SECRET environment variable is not configured")
     to_encode = data.copy()
     expire_minutes = settings.JWT_EXPIRE_MINUTES
     expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=expire_minutes))

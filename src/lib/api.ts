@@ -61,12 +61,27 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({ detail: res.statusText || 'An error occurred' }))
-    let message = 'An error occurred'
-    if (typeof errBody.detail === 'string') {
-      message = errBody.detail
-    } else if (Array.isArray(errBody.detail)) {
-      message = errBody.detail.map((d: { msg?: string }) => d.msg ?? JSON.stringify(d)).join(', ')
+    let message = res.statusText || 'An error occurred'
+    try {
+      const text = await res.text()
+      try {
+        const errBody = JSON.parse(text)
+        if (typeof errBody.detail === 'string') {
+          message = errBody.detail
+        } else if (Array.isArray(errBody.detail)) {
+          message = errBody.detail
+            .map((d: { msg?: string }) => d.msg ?? (typeof d === 'string' ? d : JSON.stringify(d)))
+            .join(', ')
+        } else if (typeof errBody.message === 'string') {
+          message = errBody.message
+        }
+      } catch {
+        if (text && text.trim().length > 0 && text.length < 300) {
+          message = text.trim()
+        }
+      }
+    } catch {
+      // keep fallback message
     }
     throw new ApiError(res.status, message)
   }
