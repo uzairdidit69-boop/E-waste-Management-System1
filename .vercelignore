@@ -1,0 +1,15 @@
+tests/
+.venv/
+node_modules/
+alembic/
+alembic.ini
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite3
+.git
+.github/
+__pycache__/
+*.pyc
+*.pyo
+

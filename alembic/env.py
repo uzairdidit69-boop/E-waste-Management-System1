@@ -40,6 +40,8 @@ if DATABASE_URL.startswith("sqlite+aiosqlite://"):
     DATABASE_URL = DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://", 1)
 elif DATABASE_URL.startswith("postgresql+asyncpg://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

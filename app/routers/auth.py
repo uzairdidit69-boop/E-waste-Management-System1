@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token, hash_password, verify_password
 from app.db import get_db
-from app.models.users import User, UserRole
-from app.models.requesters import Requester
 from app.models.collectors import Collector
 from app.models.recyclers import Recycler
+from app.models.requesters import Requester
+from app.models.users import User, UserRole
 from app.schemas.users import Token, UserCreate, UserLogin, UserRead
 
 router = APIRouter()
@@ -20,9 +20,16 @@ router = APIRouter()
 async def register(body: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user account.
 
-    - Hashes the password with Argon2.
+    - Admin cannot be registered publicly.
+    - Hashes password with Argon2.
     - Creates corresponding profile automatically based on role.
     """
+    if body.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registration as admin is not permitted",
+        )
+
     result = await db.execute(select(User).where(User.email == body.email.lower()))
     if result.scalar_one_or_none():
         raise HTTPException(

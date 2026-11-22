@@ -17,6 +17,11 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.db import get_db
 from app.models.base import Base
+from app.models.users import User, UserRole
+from app.models.requesters import Requester
+from app.models.collectors import Collector
+from app.models.recyclers import Recycler
+from app.auth import create_access_token, hash_password
 
 
 # Use SQLite for tests (no external DB required)
@@ -62,3 +67,32 @@ async def client(db_session: AsyncSession):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+async def create_user_direct(
+    db_session: AsyncSession,
+    email: str,
+    role: UserRole = UserRole.REQUESTER,
+    password: str = "Secure123!",
+) -> tuple[User, str]:
+    """Helper to directly insert a user and return (User, JWT_token)."""
+    user = User(
+        email=email.lower(),
+        hashed_password=hash_password(password),
+        role=role,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    if role == UserRole.REQUESTER:
+        db_session.add(Requester(user_id=user.id))
+    elif role == UserRole.COLLECTOR:
+        db_session.add(Collector(user_id=user.id))
+    elif role == UserRole.RECYCLER:
+        db_session.add(Recycler(user_id=user.id))
+
+    await db_session.flush()
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    return user, token
+

@@ -18,6 +18,13 @@ class UserCreate(BaseModel):
             raise ValueError("Password must be at least 8 characters")
         return v
 
+    @field_validator("role")
+    @classmethod
+    def disallow_admin_role(cls, v: UserRole) -> UserRole:
+        if v == UserRole.ADMIN:
+            raise ValueError("Registration as admin is not permitted")
+        return v
+
 
 class UserLogin(BaseModel):
     email: EmailStr

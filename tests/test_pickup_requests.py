@@ -3,11 +3,11 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.users import UserRole
+from tests.conftest import create_user_direct
 
-# ──────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────
 
 async def _register_login(client: AsyncClient, email: str, role: str = "requester") -> str:
     """Register and immediately login a user; returns the JWT."""
@@ -25,7 +25,7 @@ async def _register_login(client: AsyncClient, email: str, role: str = "requeste
 async def _create_area(client: AsyncClient, admin_token: str, name: str = "Test City") -> int:
     """Admin creates an area and returns its id."""
     resp = await client.post(
-        "/api/areas/",
+        "/api/areas",
         json={"name": name, "description": "A test area"},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
@@ -34,20 +34,20 @@ async def _create_area(client: AsyncClient, admin_token: str, name: str = "Test 
 
 
 # ──────────────────────────────────────────────
-# List endpoint
+# List & Pagination endpoints
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_list_requests_requires_auth(client: AsyncClient):
     """Unauthenticated access to list endpoint should return 401."""
-    resp = await client.get("/api/pickup-requests/")
+    resp = await client.get("/api/pickup-requests")
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_requester_sees_only_own_requests(client: AsyncClient):
+async def test_requester_sees_only_own_requests(client: AsyncClient, db_session: AsyncSession):
     """A requester must only see their own requests, not others'."""
-    admin_token = await _register_login(client, "pr_admin_list@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_list@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR List Area")
 
     req1_token = await _register_login(client, "pr_user1@example.com", "requester")
@@ -55,20 +55,20 @@ async def test_requester_sees_only_own_requests(client: AsyncClient):
 
     # user1 creates a request
     await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "User1 request"},
         headers={"Authorization": f"Bearer {req1_token}"},
     )
 
     # user2 creates a request
     await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "User2 request"},
         headers={"Authorization": f"Bearer {req2_token}"},
     )
 
     resp = await client.get(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         headers={"Authorization": f"Bearer {req1_token}"},
     )
     assert resp.status_code == 200
@@ -79,46 +79,60 @@ async def test_requester_sees_only_own_requests(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_collector_sees_all_requests(client: AsyncClient):
-    """A collector should see all pickup requests."""
-    admin_token = await _register_login(client, "pr_admin_coll@example.com", "admin")
+async def test_collector_sees_pending_and_assigned(client: AsyncClient, db_session: AsyncSession):
+    """A collector sees pending requests and their own accepted requests."""
+    _, admin_token = await create_user_direct(db_session, "pr_admin_coll@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Collector Area")
 
     req_token = await _register_login(client, "pr_requester_coll@example.com", "requester")
-    col_token = await _register_login(client, "pr_collector@example.com", "collector")
+    col1_token = await _register_login(client, "pr_collector1@example.com", "collector")
+    col2_token = await _register_login(client, "pr_collector2@example.com", "collector")
 
-    await client.post(
-        "/api/pickup-requests/",
-        json={"area_id": area_id, "description": "Collector visibility test"},
+    # Create request 1 (pending)
+    r1 = await client.post(
+        "/api/pickup-requests",
+        json={"area_id": area_id, "description": "Pending request 1"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
+    r1_id = r1.json()["id"]
 
-    resp = await client.get(
-        "/api/pickup-requests/",
-        headers={"Authorization": f"Bearer {col_token}"},
+    # Both collectors see pending request
+    resp = await client.get("/api/pickup-requests", headers={"Authorization": f"Bearer {col1_token}"})
+    assert any(r["id"] == r1_id for r in resp.json())
+
+    # Collector 1 accepts request 1
+    await client.patch(
+        f"/api/pickup-requests/{r1_id}",
+        json={"status": "accepted"},
+        headers={"Authorization": f"Bearer {col1_token}"},
     )
-    assert resp.status_code == 200
-    descriptions = [r["description"] for r in resp.json()]
-    assert "Collector visibility test" in descriptions
+
+    # Collector 1 still sees it (assigned to them)
+    resp1 = await client.get("/api/pickup-requests", headers={"Authorization": f"Bearer {col1_token}"})
+    assert any(r["id"] == r1_id for r in resp1.json())
+
+    # Collector 2 does NOT see it (it's no longer pending and assigned to collector 1)
+    resp2 = await client.get("/api/pickup-requests", headers={"Authorization": f"Bearer {col2_token}"})
+    assert not any(r["id"] == r1_id for r in resp2.json())
 
 
 @pytest.mark.asyncio
-async def test_recycler_sees_all_requests(client: AsyncClient):
-    """A recycler should see all pickup requests."""
-    admin_token = await _register_login(client, "pr_admin_rec@example.com", "admin")
+async def test_recycler_sees_all_requests(client: AsyncClient, db_session: AsyncSession):
+    """A recycler should see all pickup requests (read-only)."""
+    _, admin_token = await create_user_direct(db_session, "pr_admin_rec@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Recycler Area")
 
     req_token = await _register_login(client, "pr_requester_rec@example.com", "requester")
     rec_token = await _register_login(client, "pr_recycler@example.com", "recycler")
 
     await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "Recycler visibility test"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
 
     resp = await client.get(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         headers={"Authorization": f"Bearer {rec_token}"},
     )
     assert resp.status_code == 200
@@ -131,15 +145,15 @@ async def test_recycler_sees_all_requests(client: AsyncClient):
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_request_as_requester(client: AsyncClient):
+async def test_create_request_as_requester(client: AsyncClient, db_session: AsyncSession):
     """Requester can create a pickup request successfully."""
-    admin_token = await _register_login(client, "pr_admin_create@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_create@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Create Area")
 
     req_token = await _register_login(client, "pr_create_user@example.com", "requester")
 
     resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "2 old laptops"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
@@ -151,15 +165,15 @@ async def test_create_request_as_requester(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_create_request_as_collector_forbidden(client: AsyncClient):
+async def test_create_request_as_collector_forbidden(client: AsyncClient, db_session: AsyncSession):
     """Collectors cannot create pickup requests (only requesters can)."""
-    admin_token = await _register_login(client, "pr_admin_nocreate@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_nocreate@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR NoColl Area")
 
     col_token = await _register_login(client, "pr_col_create@example.com", "collector")
 
     resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id},
         headers={"Authorization": f"Bearer {col_token}"},
     )
@@ -170,7 +184,7 @@ async def test_create_request_as_collector_forbidden(client: AsyncClient):
 async def test_create_request_unauthenticated(client: AsyncClient):
     """Unauthenticated users cannot create requests."""
     resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": 1},
     )
     assert resp.status_code == 401
@@ -192,16 +206,16 @@ async def test_get_request_not_found(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_requester_cannot_access_others_request(client: AsyncClient):
+async def test_requester_cannot_access_others_request(client: AsyncClient, db_session: AsyncSession):
     """A requester cannot fetch another requester's individual request."""
-    admin_token = await _register_login(client, "pr_admin_access@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_access@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Access Area")
 
     req1_token = await _register_login(client, "pr_access1@example.com", "requester")
     req2_token = await _register_login(client, "pr_access2@example.com", "requester")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "Private request"},
         headers={"Authorization": f"Bearer {req1_token}"},
     )
@@ -215,75 +229,101 @@ async def test_requester_cannot_access_others_request(client: AsyncClient):
 
 
 # ──────────────────────────────────────────────
-# Update (PATCH) endpoint
+# Update (PATCH) & State Machine endpoint
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_collector_can_accept_request(client: AsyncClient):
-    """A collector can accept a pending pickup request."""
-    admin_token = await _register_login(client, "pr_admin_accept@example.com", "admin")
+async def test_collector_can_accept_and_complete_request(client: AsyncClient, db_session: AsyncSession):
+    """A collector can accept a pending request and mark it completed."""
+    _, admin_token = await create_user_direct(db_session, "pr_admin_accept@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Accept Area")
 
     req_token = await _register_login(client, "pr_req_accept@example.com", "requester")
     col_token = await _register_login(client, "pr_col_accept@example.com", "collector")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "Accept me"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
     request_id = create_resp.json()["id"]
 
-    resp = await client.patch(
+    # Pending -> Accepted
+    resp_accept = await client.patch(
         f"/api/pickup-requests/{request_id}",
         json={"status": "accepted"},
         headers={"Authorization": f"Bearer {col_token}"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "accepted"
+    assert resp_accept.status_code == 200
+    assert resp_accept.json()["status"] == "accepted"
+
+    # Accepted -> Completed
+    resp_complete = await client.patch(
+        f"/api/pickup-requests/{request_id}",
+        json={"status": "completed"},
+        headers={"Authorization": f"Bearer {col_token}"},
+    )
+    assert resp_complete.status_code == 200
+    assert resp_complete.json()["status"] == "completed"
 
 
 @pytest.mark.asyncio
-async def test_collector_can_complete_request(client: AsyncClient):
-    """A collector can mark an accepted request as completed."""
-    admin_token = await _register_login(client, "pr_admin_complete@example.com", "admin")
-    area_id = await _create_area(client, admin_token, "PR Complete Area")
+async def test_illegal_status_transitions_rejected(client: AsyncClient, db_session: AsyncSession):
+    """Enforce state machine: illegal transitions return 409 Conflict."""
+    _, admin_token = await create_user_direct(db_session, "pr_admin_trans@example.com", UserRole.ADMIN)
+    area_id = await _create_area(client, admin_token, "PR Transition Area")
 
-    req_token = await _register_login(client, "pr_req_complete@example.com", "requester")
-    col_token = await _register_login(client, "pr_col_complete@example.com", "collector")
+    req_token = await _register_login(client, "pr_req_trans@example.com", "requester")
+    col_token = await _register_login(client, "pr_col_trans@example.com", "collector")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id},
         headers={"Authorization": f"Bearer {req_token}"},
     )
     request_id = create_resp.json()["id"]
 
+    # Pending directly to Completed is illegal
+    bad_resp1 = await client.patch(
+        f"/api/pickup-requests/{request_id}",
+        json={"status": "completed"},
+        headers={"Authorization": f"Bearer {col_token}"},
+    )
+    assert bad_resp1.status_code == 409
+
+    # Accept request
     await client.patch(
         f"/api/pickup-requests/{request_id}",
         json={"status": "accepted"},
         headers={"Authorization": f"Bearer {col_token}"},
     )
 
-    resp = await client.patch(
+    # Complete request
+    await client.patch(
         f"/api/pickup-requests/{request_id}",
         json={"status": "completed"},
         headers={"Authorization": f"Bearer {col_token}"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "completed"
+
+    # Completed to Cancelled is illegal
+    bad_resp2 = await client.patch(
+        f"/api/pickup-requests/{request_id}",
+        json={"status": "cancelled"},
+        headers={"Authorization": f"Bearer {col_token}"},
+    )
+    assert bad_resp2.status_code == 409
 
 
 @pytest.mark.asyncio
-async def test_requester_can_cancel_own_request(client: AsyncClient):
+async def test_requester_can_cancel_own_request(client: AsyncClient, db_session: AsyncSession):
     """A requester can cancel their own pending request."""
-    admin_token = await _register_login(client, "pr_admin_cancel@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_cancel@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Cancel Area")
 
     req_token = await _register_login(client, "pr_req_cancel@example.com", "requester")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "Cancel me"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
@@ -299,15 +339,15 @@ async def test_requester_can_cancel_own_request(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_requester_cannot_accept_request(client: AsyncClient):
-    """A requester cannot set status to 'accepted' (only collectors/admins can)."""
-    admin_token = await _register_login(client, "pr_admin_noaccept@example.com", "admin")
-    area_id = await _create_area(client, admin_token, "PR NoAccept Area")
+async def test_requester_cannot_accept_request(client: AsyncClient, db_session: AsyncSession):
+    """A requester cannot set status to 'accepted'."""
+    _, admin_token = await create_user_direct(db_session, "pr_admin_noacc@example.com", UserRole.ADMIN)
+    area_id = await _create_area(client, admin_token, "PR NoAcc Area")
 
-    req_token = await _register_login(client, "pr_req_noaccept@example.com", "requester")
+    req_token = await _register_login(client, "pr_req_noacc@example.com", "requester")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id},
         headers={"Authorization": f"Bearer {req_token}"},
     )
@@ -326,15 +366,15 @@ async def test_requester_cannot_accept_request(client: AsyncClient):
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_admin_can_delete_request(client: AsyncClient):
+async def test_admin_can_delete_request(client: AsyncClient, db_session: AsyncSession):
     """Admin can hard-delete a pickup request."""
-    admin_token = await _register_login(client, "pr_admin_delete@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_delete@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR Delete Area")
 
     req_token = await _register_login(client, "pr_req_delete@example.com", "requester")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id, "description": "Delete me"},
         headers={"Authorization": f"Bearer {req_token}"},
     )
@@ -355,15 +395,15 @@ async def test_admin_can_delete_request(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_requester_cannot_delete_request(client: AsyncClient):
+async def test_requester_cannot_delete_request(client: AsyncClient, db_session: AsyncSession):
     """A requester cannot hard-delete a request (admin-only)."""
-    admin_token = await _register_login(client, "pr_admin_nodelete@example.com", "admin")
+    _, admin_token = await create_user_direct(db_session, "pr_admin_nodelete@example.com", UserRole.ADMIN)
     area_id = await _create_area(client, admin_token, "PR NoDelete Area")
 
     req_token = await _register_login(client, "pr_req_nodelete@example.com", "requester")
 
     create_resp = await client.post(
-        "/api/pickup-requests/",
+        "/api/pickup-requests",
         json={"area_id": area_id},
         headers={"Authorization": f"Bearer {req_token}"},
     )

@@ -22,6 +22,7 @@ class PickupRequestUpdate(BaseModel):
 class PickupRequestRead(BaseModel):
     id: int
     requester_id: int
+    collector_id: int | None = None
     area_id: int
     status: RequestStatus
     description: str | None

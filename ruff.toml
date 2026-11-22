@@ -1,0 +1,17 @@
+# ruff.toml
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # function call in argument defaults (standard for FastAPI Depends)
+    "B904",  # raise ... from err in HTTP exceptions
+]

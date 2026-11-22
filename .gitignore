@@ -63,3 +63,6 @@ htmlcov/
 *.sqlite3
 .env
 !.env.example
+.vercel
+
+.vercel_cache/

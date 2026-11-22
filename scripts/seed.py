@@ -3,6 +3,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import sys
 
@@ -16,6 +17,7 @@ if str(BASE_DIR) not in sys.path:
 load_dotenv(BASE_DIR / ".env")
 
 from sqlalchemy import select, delete
+from app.config import settings
 from app.db import AsyncSessionLocal
 from app.auth import hash_password
 from app.models.users import User, UserRole
@@ -24,6 +26,11 @@ from app.models.collectors import Collector
 from app.models.recyclers import Recycler
 from app.models.areas import Area
 from app.models.pickup_requests import PickupRequest, RequestStatus
+
+# Refuse to run in production
+if settings.is_production or os.getenv("ENV", "").lower() in ("production", "prod") or os.getenv("ENVIRONMENT", "").lower() in ("production", "prod"):
+    print("[!] ERROR: seed.py cannot be executed in production environment!")
+    sys.exit(1)
 
 USERS_DATA = [
     {
@@ -112,11 +119,19 @@ async def seed():
 
         # Seed sample requests
         requester = created_users.get(UserRole.REQUESTER)
+        collector = created_users.get(UserRole.COLLECTOR)
         if requester and created_areas:
             res_req = await session.execute(
                 select(Requester).where(Requester.user_id == requester.id)
             )
             req_profile = res_req.scalar_one_or_none()
+
+            col_profile = None
+            if collector:
+                res_col = await session.execute(
+                    select(Collector).where(Collector.user_id == collector.id)
+                )
+                col_profile = res_col.scalar_one_or_none()
 
             if req_profile:
                 res_pr = await session.execute(
@@ -134,6 +149,7 @@ async def seed():
                         ),
                         PickupRequest(
                             requester_id=req_profile.id,
+                            collector_id=col_profile.id if col_profile else None,
                             area_id=created_areas[1].id,
                             status=RequestStatus.ACCEPTED,
                             description="15 decommissioned lithium-ion laptop batteries",
@@ -141,6 +157,7 @@ async def seed():
                         ),
                         PickupRequest(
                             requester_id=req_profile.id,
+                            collector_id=col_profile.id if col_profile else None,
                             area_id=created_areas[2].id,
                             status=RequestStatus.COMPLETED,
                             description="Server rack switches and cables batch",

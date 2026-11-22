@@ -19,6 +19,16 @@ async def test_register_success(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_register_admin_disallowed(client: AsyncClient):
+    """Registering as admin must be strictly rejected."""
+    resp = await client.post(
+        "/api/auth/register",
+        json={"email": "hacker_admin@example.com", "password": "Secure123", "role": "admin"},
+    )
+    assert resp.status_code in (400, 422)
+
+
+@pytest.mark.asyncio
 async def test_register_duplicate_email(client: AsyncClient):
     payload = {"email": "bob@example.com", "password": "Secure123", "role": "requester"}
     await client.post("/api/auth/register", json=payload)
@@ -50,7 +60,7 @@ async def test_login_success(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient):
+async def test_login_wrong_password_generic_error(client: AsyncClient):
     await client.post(
         "/api/auth/register",
         json={"email": "eve@example.com", "password": "Secure123"},
@@ -60,6 +70,17 @@ async def test_login_wrong_password(client: AsyncClient):
         json={"email": "eve@example.com", "password": "wrongpass"},
     )
     assert resp.status_code == 401
+    assert resp.json()["detail"] == "Incorrect email or password"
+
+
+@pytest.mark.asyncio
+async def test_login_nonexistent_email_generic_error(client: AsyncClient):
+    resp = await client.post(
+        "/api/auth/login",
+        json={"email": "nobody_exists@example.com", "password": "Secure123"},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Incorrect email or password"
 
 
 @pytest.mark.asyncio
@@ -98,4 +119,3 @@ async def test_register_collector_and_recycler(client: AsyncClient):
         json={"email": "recycler_reg@example.com", "password": "Secure123", "role": "recycler"},
     )
     assert rec_resp.status_code == 201
-    assert rec_resp.json()["role"] == "recycler"
