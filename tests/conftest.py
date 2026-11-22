@@ -13,6 +13,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import get_db
@@ -27,7 +28,12 @@ from app.auth import create_access_token, hash_password
 # Use SQLite for tests (no external DB required)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    echo=False,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 _TestingSessionLocal: sessionmaker = sessionmaker(  # type: ignore[type-arg]
     bind=_engine,
     class_=AsyncSession,
@@ -37,9 +43,9 @@ _TestingSessionLocal: sessionmaker = sessionmaker(  # type: ignore[type-arg]
 )
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def setup_db():
-    """Create all tables once per test session."""
+    """Create all tables per test."""
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
