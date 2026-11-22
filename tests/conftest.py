@@ -4,10 +4,11 @@
 import os
 
 # Set required environment variables BEFORE any app imports so that
-# pydantic-settings (config.py) and SQLAlchemy (db.py) don't crash on startup.
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("DATABASE_URL_UNPOOLED", "sqlite:///:memory:")
-os.environ.setdefault("JWT_SECRET", "test-secret-key-that-is-at-least-64-chars-long-for-testing-purposes")
+# pydantic-settings (config.py) and SQLAlchemy (db.py) don't crash on startup
+# and always use in-memory SQLite during test runs.
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["DATABASE_URL_UNPOOLED"] = "sqlite:///:memory:"
+os.environ["JWT_SECRET"] = "test-secret-key-that-is-at-least-64-chars-long-for-testing-purposes"
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

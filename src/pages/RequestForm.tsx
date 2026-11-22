@@ -3,10 +3,14 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import type { Area, PickupRequest } from '../types'
 import { apiFetch } from '../lib/api'
+import { useToast } from '../lib/toast'
+import { haptics } from '../lib/haptics'
 import { IconPlus } from '../components/Icons'
+import { Button } from '../components/ui/Button'
 
 export const RequestForm: React.FC = () => {
   const navigate = useNavigate()
+  const toast = useToast()
   const [areas, setAreas] = useState<Area[]>([])
   const [areaId, setAreaId] = useState<number>(0)
   const [description, setDescription] = useState<string>('')
@@ -27,7 +31,9 @@ export const RequestForm: React.FC = () => {
       })
       .catch(err => {
         if (active) {
-          setError(err instanceof Error ? err.message : 'Failed to load service areas')
+          const msg = err instanceof Error ? err.message : 'Failed to load service areas'
+          setError(msg)
+          toast.error(msg)
         }
       })
       .finally(() => {
@@ -36,12 +42,13 @@ export const RequestForm: React.FC = () => {
     return () => {
       active = false
     }
-  }, [])
+  }, [toast])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!areaId) {
       setError('Please select a service area')
+      toast.warning('Please select a service area')
       return
     }
     setError('')
@@ -54,9 +61,14 @@ export const RequestForm: React.FC = () => {
           description: description.trim() || null,
         }),
       })
+      haptics.success()
+      toast.success('Pickup request submitted successfully!')
       navigate('/requests')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create request')
+      const msg = err instanceof Error ? err.message : 'Failed to create request'
+      setError(msg)
+      haptics.error()
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -64,8 +76,13 @@ export const RequestForm: React.FC = () => {
 
   if (loadingAreas) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
-        <span className="spinner" style={{ width: 28, height: 28 }} />
+      <div style={{ maxWidth: 600 }}>
+        <div className="table-card" style={{ padding: 28 }}>
+          <div className="skeleton-box" style={{ width: '40%', height: 24, marginBottom: 20 }} />
+          <div className="skeleton-box" style={{ width: '100%', height: 42, marginBottom: 16 }} />
+          <div className="skeleton-box" style={{ width: '100%', height: 96, marginBottom: 24 }} />
+          <div className="skeleton-box" style={{ width: '30%', height: 40, marginLeft: 'auto' }} />
+        </div>
       </div>
     )
   }
@@ -106,19 +123,21 @@ export const RequestForm: React.FC = () => {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24 }}>
-            <Link to="/requests" className="btn btn-ghost">
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24, alignItems: 'center' }}>
+            <Link to="/requests" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
               Cancel
             </Link>
-            <button
+            <Button
               id="submit-pickup-request"
               type="submit"
-              className="btn btn-primary"
-              disabled={submitting || areas.length === 0}
+              variant="primary"
+              size="md"
+              loading={submitting}
+              disabled={areas.length === 0}
             >
-              {submitting ? <span className="spinner" /> : <IconPlus />}
+              <IconPlus />
               Submit Request
-            </button>
+            </Button>
           </div>
         </form>
       </div>

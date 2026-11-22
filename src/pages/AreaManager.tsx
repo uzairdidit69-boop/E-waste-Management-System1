@@ -3,10 +3,14 @@ import React, { useState, useEffect } from 'react'
 import type { Area } from '../types'
 import { useAuth } from '../context/useAuth'
 import { apiFetch } from '../lib/api'
+import { useToast } from '../lib/toast'
+import { haptics } from '../lib/haptics'
 import { IconMap, IconPlus } from '../components/Icons'
+import { Button } from '../components/ui/Button'
 
 export const AreaManager: React.FC = () => {
   const { user } = useAuth()
+  const toast = useToast()
   const [areas, setAreas] = useState<Area[]>([])
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
@@ -23,7 +27,11 @@ export const AreaManager: React.FC = () => {
         const data = await apiFetch<Area[]>('/api/areas?limit=100')
         if (active) setAreas(data)
       } catch (err: unknown) {
-        if (active) setError(err instanceof Error ? err.message : 'Failed to load areas')
+        if (active) {
+          const msg = err instanceof Error ? err.message : 'Failed to load areas'
+          setError(msg)
+          toast.error(msg)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -32,7 +40,7 @@ export const AreaManager: React.FC = () => {
     return () => {
       active = false
     }
-  }, [])
+  }, [toast])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,15 +55,21 @@ export const AreaManager: React.FC = () => {
       setAreas(prev => [...prev, created])
       setName('')
       setDesc('')
+      haptics.success()
       setSuccess(`Area "${created.name}" created successfully!`)
+      toast.success(`Area "${created.name}" created!`)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create area')
+      const msg = err instanceof Error ? err.message : 'Failed to create area'
+      setError(msg)
+      haptics.error()
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDelete = async (id: number) => {
+    haptics.warning()
     if (!window.confirm('Are you sure you want to delete this service area?')) return
     setError('')
     setSuccess('')
@@ -63,9 +77,14 @@ export const AreaManager: React.FC = () => {
     try {
       await apiFetch(`/api/areas/${id}`, { method: 'DELETE' })
       setAreas(prev => prev.filter(a => a.id !== id))
+      haptics.success()
       setSuccess('Area deleted successfully!')
+      toast.success('Area deleted successfully')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete area')
+      const msg = err instanceof Error ? err.message : 'Failed to delete area'
+      setError(msg)
+      haptics.error()
+      toast.error(msg)
     } finally {
       setDeletingId(null)
     }
@@ -73,9 +92,21 @@ export const AreaManager: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
-        <span className="spinner" style={{ width: 28, height: 28 }} />
-      </div>
+      <>
+        <div className="section-header">
+          <div className="skeleton-box" style={{ width: 160, height: 28 }} />
+        </div>
+        <div className="table-card" style={{ padding: 24 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton-row">
+              <div className="skeleton-box" style={{ width: '8%', height: 18 }} />
+              <div className="skeleton-box" style={{ width: '25%', height: 18 }} />
+              <div className="skeleton-box" style={{ width: '35%', height: 18 }} />
+              <div className="skeleton-box" style={{ width: '20%', height: 18 }} />
+            </div>
+          ))}
+        </div>
+      </>
     )
   }
 
@@ -113,16 +144,17 @@ export const AreaManager: React.FC = () => {
                 placeholder="Zone details (optional)"
               />
             </div>
-            <button
+            <Button
               id="area-submit"
               type="submit"
-              className="btn btn-primary"
-              disabled={submitting}
+              variant="primary"
+              size="md"
+              loading={submitting}
               style={{ marginBottom: 0 }}
             >
-              {submitting ? <span className="spinner" /> : <IconPlus />}
+              <IconPlus />
               Add Area
-            </button>
+            </Button>
           </form>
         </div>
       )}
@@ -160,14 +192,14 @@ export const AreaManager: React.FC = () => {
                   </td>
                   {user?.role === 'admin' && (
                     <td>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ padding: '6px 12px', fontSize: 12, color: 'var(--color-danger)' }}
-                        disabled={deletingId === a.id}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        loading={deletingId === a.id}
                         onClick={() => handleDelete(a.id)}
                       >
-                        {deletingId === a.id ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Delete'}
-                      </button>
+                        Delete
+                      </Button>
                     </td>
                   )}
                 </tr>
