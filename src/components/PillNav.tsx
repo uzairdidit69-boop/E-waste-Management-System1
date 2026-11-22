@@ -1,8 +1,22 @@
 // src/components/PillNav.tsx
-import React, { useState, useEffect, useRef } from 'react'
+// ─────────────────────────────────────────────────────────────
+// PHASE 0 ROOT CAUSE:
+//   The old implementation used Tailwind utility classes (fixed, hidden,
+//   md:flex, rounded-full, etc.) but Tailwind is NOT installed – those
+//   class names were dead. Only the inline style={{ }} props applied,
+//   turning the <nav> into a full-width block element with no layout.
+//   Additionally, it was NOT portalled to document.body, so any GSAP/Lenis
+//   ancestor transform broke position:fixed containment.
+//
+// FIX: 100% inline styles, createPortal to document.body, no Tailwind.
+// ─────────────────────────────────────────────────────────────
+
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { Home, ChevronDown, User, LogOut, ArrowUpRight, Menu, X } from 'lucide-react'
 import { useAuth } from '../context/useAuth'
+import { haptics } from '../lib/haptics'
 
 interface NavDropdownItem {
   label: string
@@ -13,7 +27,7 @@ interface NavDropdownItem {
 const requesterLinks: NavDropdownItem[] = [
   { label: 'Schedule Pickup', href: '/requests/new', desc: 'Book a collection for your devices' },
   { label: 'My Requests', href: '/requests', desc: 'Track pending and completed pickups' },
-  { label: 'Accepted Items', href: '/#pricing', desc: 'Laptops, phones, batteries & servers' },
+  { label: 'Service Areas', href: '/areas', desc: 'Supported pickup regions' },
 ]
 
 const collectorLinks: NavDropdownItem[] = [
@@ -25,237 +39,505 @@ const collectorLinks: NavDropdownItem[] = [
 const recyclerLinks: NavDropdownItem[] = [
   { label: 'Facility Inbound', href: '/requests', desc: 'Verified shipments received' },
   { label: 'Recycling Partners', href: '/areas', desc: 'Certified e-waste processing hubs' },
-  { label: 'Compliance & Audit', href: '/#compliance', desc: 'Zero-landfill certs & reports' },
+  { label: 'Compliance & Audit', href: '/requests', desc: 'Zero-landfill certs & reports' },
 ]
+
+type MenuKey = 'requester' | 'collector' | 'recycler' | 'mobile' | null
+
+const isMobile = () => typeof window !== 'undefined' && window.innerWidth <= 768
+
+// ── Shared style tokens ─────────────────────────────────────
+const ITEM_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  whiteSpace: 'nowrap',
+  color: 'rgba(255,255,255,0.88)',
+  fontFamily: 'inherit',
+  fontSize: '14px',
+  fontWeight: 500,
+  lineHeight: 1,
+  padding: '0 12px',
+  height: '40px',
+  minWidth: '44px',
+  borderRadius: '999px',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  textDecoration: 'none',
+  WebkitTapHighlightColor: 'transparent',
+  touchAction: 'manipulation',
+  transition: 'background 160ms, color 160ms',
+  userSelect: 'none',
+}
+
+const DROPDOWN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 'calc(100% + 10px)',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: '268px',
+  padding: '10px',
+  borderRadius: '20px',
+  background: 'rgba(11,11,20,0.96)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+  zIndex: 10,
+}
 
 export const PillNav: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [activeMenu, setActiveMenu] = useState<'requester' | 'collector' | 'recycler' | 'mobile' | null>(null)
+  const [activeMenu, setActiveMenu] = useState<MenuKey>(null)
+  const [mobile, setMobile] = useState(isMobile)
+  const [mounted] = useState(() => typeof document !== 'undefined')
   const navRef = useRef<HTMLDivElement>(null)
 
-  // Close menus on outside click or Esc
+  // Responsive breakpoint
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const onResize = () => setMobile(isMobile())
+    window.addEventListener('resize', onResize, { passive: true })
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Close on Esc / outside click
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setActiveMenu(null)
     }
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleOutside = (e: MouseEvent) => {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
         setActiveMenu(null)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKey)
+    document.addEventListener('mousedown', handleOutside)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKey)
+      document.removeEventListener('mousedown', handleOutside)
     }
   }, [])
 
-  const toggleMenu = (menu: 'requester' | 'collector' | 'recycler') => {
-    setActiveMenu((prev) => (prev === menu ? null : menu))
-  }
+  const toggleMenu = useCallback((key: MenuKey) => {
+    haptics.select()
+    setActiveMenu((prev) => (prev === key ? null : key))
+  }, [])
 
-  const renderDropdown = (items: NavDropdownItem[], title: string) => {
-    return (
+  const renderDropdown = (items: NavDropdownItem[], title: string) => (
+    <div style={DROPDOWN_STYLE}>
       <div
-        className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-[280px] p-3 rounded-[20px] shadow-2xl backdrop-blur-xl border border-white/10 select-none animate-in fade-in zoom-in-95 duration-180"
         style={{
-          backgroundColor: 'rgba(11, 11, 20, 0.94)',
-          color: '#FFFFFF',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.45)',
-          borderRadius: 'var(--r-card)',
-          zIndex: 100,
+          padding: '4px 10px 8px',
+          fontSize: '10px',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.35)',
         }}
       >
-        <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white/40">
-          {title}
-        </div>
-        <div className="flex flex-col gap-1 mt-1">
-          {items.map((item) => (
+        {title}
+      </div>
+      {items.map((item) => (
+        <Link
+          key={item.label}
+          to={item.href}
+          onClick={() => { haptics.tap(); setActiveMenu(null) }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 12px',
+            borderRadius: '12px',
+            textDecoration: 'none',
+            transition: 'background 140ms',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'transparent'
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#FFFFFF',
+                marginBottom: '2px',
+              }}
+            >
+              {item.label}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>
+              {item.desc}
+            </div>
+          </div>
+          <ArrowUpRight size={13} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+        </Link>
+      ))}
+    </div>
+  )
+
+  // Mobile bottom-sheet
+  const renderMobileSheet = () => (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 'calc(100% + 10px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 'min(320px, calc(100vw - 32px))',
+        padding: '16px',
+        borderRadius: '20px',
+        background: 'rgba(11,11,20,0.97)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+        zIndex: 10,
+        color: '#FFFFFF',
+      }}
+    >
+      {[
+        { title: 'For Requesters', items: requesterLinks },
+        { title: 'For Collectors', items: collectorLinks },
+        { title: 'For Recyclers', items: recyclerLinks },
+      ].map((group) => (
+        <div key={group.title} style={{ marginBottom: '12px' }}>
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: '#FFA05A',
+              marginBottom: '6px',
+              paddingLeft: '4px',
+            }}
+          >
+            {group.title}
+          </div>
+          {group.items.map((item) => (
             <Link
               key={item.label}
               to={item.href}
-              onClick={() => setActiveMenu(null)}
-              className="flex items-center justify-between p-2.5 rounded-[12px] hover:bg-white/10 transition-colors group"
+              onClick={() => { haptics.tap(); setActiveMenu(null) }}
+              style={{
+                display: 'block',
+                padding: '8px 8px',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.88)',
+                textDecoration: 'none',
+                transition: 'background 140ms',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
             >
-              <div>
-                <div className="text-sm font-semibold text-white group-hover:text-[#FFA05A] transition-colors">
-                  {item.label}
-                </div>
-                <div className="text-xs text-white/50">{item.desc}</div>
-              </div>
-              <ArrowUpRight size={14} className="text-white/40 group-hover:text-[#FFA05A] transition-colors" />
+              {item.label}
             </Link>
           ))}
         </div>
-      </div>
-    )
-  }
+      ))}
+    </div>
+  )
 
-  return (
-    <nav
-      ref={navRef}
-      role="navigation"
-      aria-label="Main Floating Navigation"
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-3 h-[64px] min-w-[320px] max-w-[580px] w-[90vw] md:w-[32vw] rounded-[999px] shadow-2xl border border-white/10"
+  if (!mounted) return null
+
+  const nav = (
+    // ── Transparent outer wrapper: fixed, full-width, click-through ──
+    <div
       style={{
-        backgroundColor: 'rgba(11, 11, 20, 0.88)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        borderRadius: 'var(--r-pill)',
-        boxShadow: '0 20px 45px rgba(11, 11, 20, 0.35)',
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+        display: 'flex',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        zIndex: 1000,
       }}
     >
-      {/* Left: Round Home Button (44px) */}
-      <Link
-        to="/"
-        aria-label="EcoTrack Home"
-        className="w-[44px] h-[44px] rounded-full flex items-center justify-center text-white transition-all duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-105 active:scale-95"
+      {/* ── Shrink-wrap inner pill ── */}
+      <nav
+        ref={navRef}
+        role="navigation"
+        aria-label="Main floating navigation"
         style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          pointerEvents: 'auto',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '2px',
+          padding: '8px',
+          borderRadius: '999px',
+          maxWidth: 'calc(100vw - 32px)',
+          background: 'rgba(11,11,20,0.90)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.15)',
+          position: 'relative',
         }}
       >
-        <Home size={19} className="text-white" />
-      </Link>
-
-      {/* Desktop Menu Items */}
-      <div className="hidden md:flex items-center gap-1">
-        {/* Requesters Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => toggleMenu('requester')}
-            aria-expanded={activeMenu === 'requester'}
-            className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-[999px] transition-all duration-[180ms]"
-          >
-            <span>Requesters</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-[180ms] ${
-                activeMenu === 'requester' ? 'rotate-180 text-[#FFA05A]' : 'text-white/60'
-              }`}
-            />
-          </button>
-          {activeMenu === 'requester' && renderDropdown(requesterLinks, 'For Requesters')}
-        </div>
-
-        {/* Collectors Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => toggleMenu('collector')}
-            aria-expanded={activeMenu === 'collector'}
-            className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-[999px] transition-all duration-[180ms]"
-          >
-            <span>Collectors</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-[180ms] ${
-                activeMenu === 'collector' ? 'rotate-180 text-[#FFA05A]' : 'text-white/60'
-              }`}
-            />
-          </button>
-          {activeMenu === 'collector' && renderDropdown(collectorLinks, 'For Collectors')}
-        </div>
-
-        {/* Recyclers Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => toggleMenu('recycler')}
-            aria-expanded={activeMenu === 'recycler'}
-            className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-[999px] transition-all duration-[180ms]"
-          >
-            <span>Recyclers</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-[180ms] ${
-                activeMenu === 'recycler' ? 'rotate-180 text-[#FFA05A]' : 'text-white/60'
-              }`}
-            />
-          </button>
-          {activeMenu === 'recycler' && renderDropdown(recyclerLinks, 'For Recyclers')}
-        </div>
-      </div>
-
-      {/* Mobile Drawer Button */}
-      <div className="md:hidden relative">
-        <button
-          onClick={() => setActiveMenu(activeMenu === 'mobile' ? null : 'mobile')}
-          className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white/90 hover:bg-white/10 rounded-[999px]"
+        {/* Home button */}
+        <Link
+          to="/"
+          aria-label="EcoTrack Home"
+          onPointerDown={() => haptics.tap()}
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'rgba(255,255,255,0.9)',
+            background: 'rgba(255,255,255,0.12)',
+            textDecoration: 'none',
+            flexShrink: 0,
+            transition: 'background 160ms, transform 120ms',
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.2)'
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
+          }}
         >
-          {activeMenu === 'mobile' ? <X size={16} /> : <Menu size={16} />}
-          <span>Menu</span>
-        </button>
+          <Home size={18} />
+        </Link>
 
-        {activeMenu === 'mobile' && (
-          <div
-            className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-[310px] p-4 rounded-[20px] shadow-2xl backdrop-blur-xl border border-white/10"
-            style={{
-              backgroundColor: 'rgba(11, 11, 20, 0.95)',
-              color: '#FFFFFF',
-              borderRadius: 'var(--r-card)',
-            }}
-          >
-            <div className="flex flex-col gap-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-[#FFA05A]">Navigation</div>
-              <Link
-                to="/requests"
-                onClick={() => setActiveMenu(null)}
-                className="text-sm font-semibold py-1 hover:text-[#FFA05A]"
+        {/* Desktop nav items */}
+        {!mobile && (
+          <>
+            {/* Requesters */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => toggleMenu('requester')}
+                aria-expanded={activeMenu === 'requester'}
+                style={ITEM_STYLE}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+                  ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'transparent'
+                  ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.88)'
+                }}
               >
-                Pickup Requests
-              </Link>
-              <Link
-                to="/requests/new"
-                onClick={() => setActiveMenu(null)}
-                className="text-sm font-semibold py-1 hover:text-[#FFA05A]"
-              >
-                Schedule Pickup
-              </Link>
-              <Link
-                to="/areas"
-                onClick={() => setActiveMenu(null)}
-                className="text-sm font-semibold py-1 hover:text-[#FFA05A]"
-              >
-                Service Areas
-              </Link>
+                <span>Requesters</span>
+                <ChevronDown
+                  size={13}
+                  style={{
+                    color: activeMenu === 'requester' ? '#FFA05A' : 'rgba(255,255,255,0.5)',
+                    transition: 'transform 180ms, color 180ms',
+                    transform: activeMenu === 'requester' ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                />
+              </button>
+              {activeMenu === 'requester' && renderDropdown(requesterLinks, 'For Requesters')}
             </div>
+
+            {/* Collectors */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => toggleMenu('collector')}
+                aria-expanded={activeMenu === 'collector'}
+                style={ITEM_STYLE}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+                  ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'transparent'
+                  ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.88)'
+                }}
+              >
+                <span>Collectors</span>
+                <ChevronDown
+                  size={13}
+                  style={{
+                    color: activeMenu === 'collector' ? '#FFA05A' : 'rgba(255,255,255,0.5)',
+                    transition: 'transform 180ms, color 180ms',
+                    transform: activeMenu === 'collector' ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                />
+              </button>
+              {activeMenu === 'collector' && renderDropdown(collectorLinks, 'For Collectors')}
+            </div>
+
+            {/* Recyclers */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => toggleMenu('recycler')}
+                aria-expanded={activeMenu === 'recycler'}
+                style={ITEM_STYLE}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+                  ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'transparent'
+                  ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.88)'
+                }}
+              >
+                <span>Recyclers</span>
+                <ChevronDown
+                  size={13}
+                  style={{
+                    color: activeMenu === 'recycler' ? '#FFA05A' : 'rgba(255,255,255,0.5)',
+                    transition: 'transform 180ms, color 180ms',
+                    transform: activeMenu === 'recycler' ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                />
+              </button>
+              {activeMenu === 'recycler' && renderDropdown(recyclerLinks, 'For Recyclers')}
+            </div>
+          </>
+        )}
+
+        {/* Mobile menu button */}
+        {mobile && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => toggleMenu('mobile')}
+              aria-label={activeMenu === 'mobile' ? 'Close menu' : 'Open menu'}
+              aria-expanded={activeMenu === 'mobile'}
+              style={ITEM_STYLE}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
+            >
+              {activeMenu === 'mobile' ? <X size={16} /> : <Menu size={16} />}
+              <span>Menu</span>
+            </button>
+            {activeMenu === 'mobile' && renderMobileSheet()}
           </div>
         )}
-      </div>
 
-      {/* Right: Cantaloupe Sign In or User Dashboard Pill */}
-      {user ? (
-        <div className="flex items-center gap-1.5">
+        {/* Separator */}
+        <div
+          style={{
+            width: '1px',
+            height: '24px',
+            background: 'rgba(255,255,255,0.12)',
+            margin: '0 4px',
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Auth pill */}
+        {user ? (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <Link
+              to="/dashboard"
+              onPointerDown={() => haptics.tap()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '0 14px',
+                height: '36px',
+                borderRadius: '999px',
+                background: '#FFA05A',
+                color: '#0B0B14',
+                fontWeight: 700,
+                fontSize: '13px',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                transition: 'background 160ms, transform 120ms',
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = '#ff9142'
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = '#FFA05A'
+              }}
+            >
+              <User size={13} />
+              {!mobile && <span>Dashboard</span>}
+            </Link>
+            <button
+              onClick={() => { haptics.tap(); logout(); navigate('/login') }}
+              title="Log out"
+              aria-label="Log out"
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'rgba(255,255,255,0.5)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background 160ms, color 160ms',
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
+                ;(e.currentTarget as HTMLElement).style.color = '#FFFFFF'
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent'
+                ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'
+              }}
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+        ) : (
           <Link
-            to="/dashboard"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-[999px] text-[#0B0B14] bg-[#FFA05A] hover:bg-[#ff9142] transition-transform active:scale-95 shadow-sm"
-            style={{ borderRadius: 'var(--r-pill)' }}
-          >
-            <User size={13} />
-            <span className="hidden sm:inline">Dashboard</span>
-          </Link>
-          <button
-            onClick={() => {
-              logout()
-              navigate('/login')
+            to="/login"
+            onPointerDown={() => haptics.tap()}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              height: '36px',
+              borderRadius: '999px',
+              background: '#FFA05A',
+              color: '#0B0B14',
+              fontWeight: 700,
+              fontSize: '13px',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+              transition: 'background 160ms',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation',
             }}
-            title="Log out"
-            aria-label="Log out"
-            className="w-[32px] h-[32px] rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = '#ff9142'
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = '#FFA05A'
+            }}
           >
-            <LogOut size={14} />
-          </button>
-        </div>
-      ) : (
-        <Link
-          to="/login"
-          className="px-4 py-2 text-xs md:text-sm font-semibold rounded-[999px] text-[#0B0B14] bg-[#FFA05A] hover:bg-[#ff9142] transition-transform active:scale-95 shadow-sm whitespace-nowrap"
-          style={{ borderRadius: 'var(--r-pill)' }}
-        >
-          Sign in
-        </Link>
-      )}
-    </nav>
+            Sign in
+          </Link>
+        )}
+      </nav>
+    </div>
   )
-}
 
+  return createPortal(nav, document.body)
+}

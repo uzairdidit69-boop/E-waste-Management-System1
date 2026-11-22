@@ -2,11 +2,13 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
+import { useToast } from '../lib/toast'
 import { IconRecycle } from '../components/Icons'
-import { BrandPill } from '../components/ui/Buttons'
+import { Button } from '../components/ui/Button'
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
@@ -22,9 +24,12 @@ export const LoginPage: React.FC = () => {
     setLoading(true)
     try {
       await login(email, password)
+      toast.success('Signed in successfully!')
       navigate(from, { replace: true })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please check credentials.')
+      const msg = err instanceof Error ? err.message : 'Login failed. Please check credentials.'
+      setError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -80,15 +85,17 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div style={{ marginTop: '16px' }}>
-            <BrandPill
+            <Button
               id="auth-submit"
               type="submit"
-              style={{ width: '100%', justifyContent: 'center' }}
-              disabled={loading}
+              variant="brand"
+              size="lg"
+              loading={loading}
               showArrow
+              style={{ width: '100%', justifyContent: 'center' }}
             >
-              {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Sign in'}
-            </BrandPill>
+              Sign in
+            </Button>
           </div>
         </form>
 
@@ -98,7 +105,7 @@ export const LoginPage: React.FC = () => {
             to="/register"
             style={{ color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}
           >
-            Sign up
+            Create account
           </Link>
         </div>
       </div>

@@ -2,12 +2,14 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
+import { useToast } from '../lib/toast'
 import type { Role } from '../types'
 import { IconRecycle } from '../components/Icons'
-import { BrandPill } from '../components/ui/Buttons'
+import { Button } from '../components/ui/Button'
 
 export const RegisterPage: React.FC = () => {
   const { register } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
@@ -22,9 +24,12 @@ export const RegisterPage: React.FC = () => {
     setLoading(true)
     try {
       await register(email, password, role)
+      toast.success('Account created successfully!')
       navigate('/dashboard', { replace: true })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Registration failed. Please check inputs.')
+      const msg = err instanceof Error ? err.message : 'Registration failed. Please check inputs.'
+      setError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -96,19 +101,17 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div style={{ marginTop: '16px' }}>
-            <BrandPill
+            <Button
               id="register-submit"
               type="submit"
-              style={{ width: '100%', justifyContent: 'center' }}
-              disabled={loading}
+              variant="brand"
+              size="lg"
+              loading={loading}
               showArrow
+              style={{ width: '100%', justifyContent: 'center' }}
             >
-              {loading ? (
-                <span className="spinner" style={{ width: 16, height: 16 }} />
-              ) : (
-                'Create account'
-              )}
-            </BrandPill>
+              Create account
+            </Button>
           </div>
         </form>
 

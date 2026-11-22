@@ -139,7 +139,7 @@ export const Layout: React.FC = () => {
           </div>
         </header>
 
-        <div className="content">
+        <div className="content page-fade" key={location.pathname}>
           <Outlet />
         </div>
       </main>

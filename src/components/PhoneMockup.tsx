@@ -118,42 +118,20 @@ export const PhoneMockup: React.FC<PhoneMockupProps> = ({
         >
           <span>9:41</span>
 
-          {/* Dynamic Island */}
+          {/* Dynamic Island – single dark pill, no coloured dots */}
           {showDynamicIsland && (
             <div
               style={{
-                width: '86px',
-                height: '24px',
+                width: '80px',
+                height: '22px',
                 background: '#0B0B14',
-                borderRadius: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                padding: '0 8px',
-                gap: '5px',
+                borderRadius: '14px',
                 position: 'absolute',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 top: '9px',
               }}
-            >
-              <div
-                style={{
-                  width: '9px',
-                  height: '9px',
-                  borderRadius: '50%',
-                  background: '#1F4BFF',
-                }}
-              />
-              <div
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#059669',
-                }}
-              />
-            </div>
+            />
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

@@ -12,50 +12,53 @@ import { RequestForm } from './pages/RequestForm'
 import { AreaManager } from './pages/AreaManager'
 import { PillNav } from './components/PillNav'
 import { HelpFab } from './components/HelpFab'
+import { ToastProvider } from './lib/toast'
 import './App.css'
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Landing Page */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/landing" element={<Landing />} />
+    <ToastProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Landing Page */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/landing" element={<Landing />} />
 
-          {/* Public Auth Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+            {/* Public Auth Routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          {/* Protected Application Layout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/requests" element={<RequestList />} />
+            {/* Protected Application Layout */}
             <Route
-              path="/requests/new"
               element={
-                <ProtectedRoute allowedRoles={['requester', 'admin']}>
-                  <RequestForm />
+                <ProtectedRoute>
+                  <Layout />
                 </ProtectedRoute>
               }
-            />
-            <Route path="/areas" element={<AreaManager />} />
-          </Route>
+            >
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/requests" element={<RequestList />} />
+              <Route
+                path="/requests/new"
+                element={
+                  <ProtectedRoute allowedRoles={['requester', 'admin']}>
+                    <RequestForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/areas" element={<AreaManager />} />
+            </Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
 
-        {/* Global Floating Pill Navigation & Help FAB */}
-        <PillNav />
-        <HelpFab />
-      </BrowserRouter>
-    </AuthProvider>
+          {/* Global Floating Pill Navigation & Help FAB – portalled to document.body */}
+          <PillNav />
+          <HelpFab />
+        </BrowserRouter>
+      </AuthProvider>
+    </ToastProvider>
   )
 }
