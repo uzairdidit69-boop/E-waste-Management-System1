@@ -1,6 +1,6 @@
 // src/components/Layout.tsx
 import React from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { IconDashboard, IconPackage, IconMap, IconLogout, IconRecycle } from './Icons'
 
@@ -12,6 +12,7 @@ export const Layout: React.FC = () => {
 
   const getPageInfo = () => {
     switch (location.pathname) {
+      case '/dashboard':
       case '/':
         return { title: 'Dashboard', subtitle: 'Overview of your e-waste activity' }
       case '/requests':
@@ -32,18 +33,18 @@ export const Layout: React.FC = () => {
     <div className="app">
       {/* Sidebar */}
       <aside className="sidebar">
-        <div className="sidebar-logo">
+        <Link to="/dashboard" className="sidebar-logo" style={{ textDecoration: 'none' }}>
           <IconRecycle />
           <div>
             <h1>EcoTrack</h1>
             <span>E-Waste Platform</span>
           </div>
-        </div>
+        </Link>
 
         <span className="nav-section-label">Navigation</span>
 
         <NavLink
-          to="/"
+          to="/dashboard"
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           id="nav-dashboard"
           end
@@ -70,9 +71,27 @@ export const Layout: React.FC = () => {
         <div className="sidebar-spacer" />
 
         <span className="nav-section-label">Account</span>
-        <div style={{ padding: '8px 14px', fontSize: 13 }}>
-          <div style={{ fontWeight: 600 }}>{user.email}</div>
-          <div style={{ color: 'var(--color-primary)', fontSize: 12, textTransform: 'capitalize', marginTop: 2 }}>
+        <div
+          style={{
+            padding: '12px 14px',
+            fontSize: '13px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: 'var(--r-card)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            marginBottom: '8px',
+          }}
+        >
+          <div style={{ fontWeight: 600, color: '#FFFFFF', wordBreak: 'break-all' }}>{user.email}</div>
+          <div
+            style={{
+              color: '#FFA05A',
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              marginTop: '4px',
+            }}
+          >
             {user.role}
           </div>
         </div>
@@ -80,7 +99,14 @@ export const Layout: React.FC = () => {
         <button
           id="nav-logout"
           className="nav-item"
-          style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+          style={{
+            background: 'none',
+            border: 'none',
+            width: '100%',
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: '#A0A0B0',
+          }}
           onClick={logout}
         >
           <IconLogout /> Sign out
@@ -95,7 +121,21 @@ export const Layout: React.FC = () => {
             <div className="topbar-subtitle">{subtitle}</div>
           </div>
           <div className="topbar-actions">
-            <div className="avatar" title={user.email}>{initials}</div>
+            <Link
+              to="/"
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-primary)',
+                textDecoration: 'none',
+                marginRight: '8px',
+              }}
+            >
+              Public View ↗
+            </Link>
+            <div className="avatar" title={user.email}>
+              {initials}
+            </div>
           </div>
         </header>
 

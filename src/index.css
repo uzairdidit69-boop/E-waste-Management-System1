@@ -1,37 +1,35 @@
-/* src/index.css – Global design tokens and resets */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* src/index.css – EcoTrack Design Tokens & Global Styles */
+@import '@fontsource-variable/inter-tight';
 
 :root {
-  /* Color palette */
-  --color-bg: #0a0e1a;
-  --color-surface: #111827;
-  --color-surface-2: #1a2235;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-primary: #22c55e;
-  --color-primary-dark: #16a34a;
-  --color-primary-glow: rgba(34, 197, 94, 0.15);
-  --color-accent: #3b82f6;
-  --color-accent-glow: rgba(59, 130, 246, 0.15);
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-success: #22c55e;
-  --color-text: #f1f5f9;
-  --color-text-muted: #94a3b8;
-  --color-text-dim: #475569;
+  /* PALETTE DESIGN TOKENS */
+  --midnight: #0B0B14;
+  --midnight-surface: #15151F;
+  --electric-blue: #1F4BFF;
+  --blue-deep: #1236C9;
+  --blue-tint: #E8EDFF;
+  --cantaloupe: #FFA05A;
+  --cantaloupe-tint: #FFEBDB;
+  --white: #FFFFFF;
+  --page-bg: #FFFFFF;
+  --muted-text: #6B6B7B;
+  --border-light: rgba(11, 11, 20, 0.08);
+  --border-white: rgba(255, 255, 255, 0.15);
 
-  /* Spacing */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  /* RADII */
+  --r-tile: 22%;
+  --r-card: 20px;
+  --r-input: 14px;
+  --r-pill: 999px;
 
-  /* Shadows */
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-primary: 0 0 20px rgba(34, 197, 94, 0.3);
+  /* MOTION */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur: 500ms;
 
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 16px;
-  color-scheme: dark;
+  /* TYPOGRAPHY */
+  font-family: 'Inter Tight Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
 }
 
 *, *::before, *::after {
@@ -40,32 +38,108 @@
   padding: 0;
 }
 
-html, body, #root {
-  height: 100%;
+html {
+  background-color: var(--page-bg);
+  color: var(--midnight);
+  font-family: 'Inter Tight Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  background-color: var(--page-bg);
+  color: var(--midnight);
+  overflow-x: hidden;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
-a { color: inherit; text-decoration: none; }
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
+/* Headings: weight 600-700, letter-spacing -0.04em */
+h1, h2, h3, h4, h5, h6 {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: inherit;
+}
+
+p, span, li, input, textarea, select {
+  font-weight: 400;
+}
+
+b, strong {
+  font-weight: 600;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Base button defaults */
 button {
   font-family: inherit;
   cursor: pointer;
   border: none;
+  background: transparent;
   outline: none;
 }
 
-input, textarea, select {
-  font-family: inherit;
-  outline: none;
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--cantaloupe);
+  outline-offset: 2px;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+/* Smooth scrolling via Lenis */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(11, 11, 20, 0.15);
+  border-radius: var(--r-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(11, 11, 20, 0.25);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

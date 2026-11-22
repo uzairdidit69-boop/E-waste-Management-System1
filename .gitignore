@@ -65,3 +65,4 @@ htmlcov/
 .vercel
 
 .vercel_cache/
+scratch/
