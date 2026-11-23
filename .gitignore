@@ -67,3 +67,4 @@ htmlcov/
 .vercel_cache/
 scratch/
 .neon
+.env*
