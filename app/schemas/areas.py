@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # app/schemas/areas.py
 """Pydantic schemas for areas."""
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # app/config.py
 """Application configuration using pydantic-settings."""
 

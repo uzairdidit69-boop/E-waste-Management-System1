@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 # app/auth.py
 """JWT creation/verification and password hashing utilities."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
@@ -9,6 +11,8 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 from .config import settings
+
+UTC = timezone.utc
 
 # Moderate RFC 9106 recommended parameters optimized for serverless latency
 _ph = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)

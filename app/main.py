@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # app/main.py
 """FastAPI application entry point for the E-Waste Management System."""
 

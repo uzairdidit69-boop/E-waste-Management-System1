@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # app/routers/pickup_requests.py
 """Pickup requests router: role-based CRUD and lifecycle for waste pickup requests."""
 

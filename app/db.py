@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # app/db.py
 """Async SQLAlchemy engine and session factory for the E-Waste Management System."""
 
@@ -22,8 +24,8 @@ def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any], type]:
     - Uses NullPool for serverless PostgreSQL and file SQLite; StaticPool for in-memory SQLite.
     """
     if not raw_url:
-        logger.warning("DATABASE_URL is empty; falling back to temporary in-memory SQLite engine")
-        return "sqlite+aiosqlite:///:memory:", {}, StaticPool
+        logger.warning("DATABASE_URL is empty; database operations will be unavailable")
+        return "", {}, NullPool
 
     url = raw_url
     if url.startswith("postgresql://"):
@@ -87,10 +89,8 @@ def get_session_local() -> sessionmaker | None:
     return AsyncSessionLocal
 
 
-# Attempt startup initialization if DATABASE_URL is configured
-if settings.DATABASE_URL:
-    get_session_local()
-else:
+# Lazy startup - database engine is initialized on-demand upon first request
+if not settings.DATABASE_URL:
     logger.warning("STARTUP WARNING: DATABASE_URL is not configured; database engine initialization deferred.")
 
 

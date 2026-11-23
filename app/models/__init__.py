@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Import all model classes and expose Base metadata for Alembic autogenerate.
 """
 
