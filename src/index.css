@@ -121,7 +121,8 @@ html.lenis, html.lenis body {
 
 /* Bottom padding so fixed pill nav never covers page content */
 .landing-page-root,
-.auth-page {
+.auth-page,
+.content {
   padding-bottom: 120px;
 }
 

@@ -79,7 +79,7 @@ async def health_db_check(response: Response, db: AsyncSession = Depends(get_db)
     if not settings.DATABASE_URL:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         logger.error("Health DB check failed: DATABASE_URL is not set.")
-        return {"status": "error", "db": "disconnected", "detail": "DATABASE_URL is not configured"}
+        return {"status": "error", "db": "disconnected", "detail": "Database connection failed"}
     try:
         await db.execute(text("SELECT 1"))
         return {"status": "ok", "db": "connected"}
