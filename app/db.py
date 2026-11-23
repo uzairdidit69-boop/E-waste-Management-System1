@@ -4,6 +4,7 @@
 import logging
 import urllib.parse
 from typing import Any
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
@@ -48,27 +49,58 @@ def normalize_database_url(raw_url: str) -> tuple[str, dict[str, Any], type]:
     return url, connect_args, pool_class
 
 
-DATABASE_URL, connect_args, pool_class = normalize_database_url(settings.DATABASE_URL)
+engine: AsyncEngine | None = None
+AsyncSessionLocal: sessionmaker | None = None
+DATABASE_URL: str = ""
+connect_args: dict[str, Any] = {}
+pool_class: type = NullPool
 
-engine: AsyncEngine = create_async_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    poolclass=pool_class,
-    connect_args=connect_args,
-    echo=False,
-)
 
-AsyncSessionLocal: sessionmaker = sessionmaker(  # type: ignore[type-arg]
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+def get_engine() -> AsyncEngine | None:
+    """Lazily initialize and return the async engine."""
+    global engine, DATABASE_URL, connect_args, pool_class
+    if engine is None and settings.DATABASE_URL:
+        DATABASE_URL, connect_args, pool_class = normalize_database_url(settings.DATABASE_URL)
+        engine = create_async_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            poolclass=pool_class,
+            connect_args=connect_args,
+            echo=False,
+        )
+    return engine
+
+
+def get_session_local() -> sessionmaker | None:
+    """Lazily initialize and return the AsyncSessionLocal factory."""
+    global AsyncSessionLocal
+    if AsyncSessionLocal is None and settings.DATABASE_URL:
+        eng = get_engine()
+        if eng is not None:
+            AsyncSessionLocal = sessionmaker(  # type: ignore[type-arg]
+                bind=eng,
+                class_=AsyncSession,
+                expire_on_commit=False,
+                autoflush=False,
+                autocommit=False,
+            )
+    return AsyncSessionLocal
+
+
+# Attempt startup initialization if DATABASE_URL is configured
+if settings.DATABASE_URL:
+    get_session_local()
+else:
+    logger.warning("STARTUP WARNING: DATABASE_URL is not configured; database engine initialization deferred.")
 
 
 async def get_db():
     """FastAPI dependency that yields an async DB session."""
-    async with AsyncSessionLocal() as session:
+    session_factory = get_session_local()
+    if session_factory is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is not configured. DATABASE_URL environment variable is missing.",
+        )
+    async with session_factory() as session:
         yield session
-
