@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
-from .db import get_db
+from .db import get_db, get_session_local
 from .routers import areas, auth, pickup_requests, users
 
 logger = logging.getLogger("ecotrack")
@@ -76,18 +76,20 @@ async def health_check():
 
 
 @app.get("/api/health/db", tags=["health"])
-async def health_db_check(response: Response, db: AsyncSession = Depends(get_db)):
+async def health_db_check():
     """Health-check endpoint validating live database connection."""
-    if not settings.DATABASE_URL:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        logger.error("Health DB check failed: DATABASE_URL is not set.")
-        return {"status": "error", "db": "disconnected", "detail": "Database connection failed"}
     try:
-        await db.execute(text("SELECT 1"))
+        session_factory = get_session_local()
+        if session_factory is None:
+            raise RuntimeError("Database session factory could not be initialized")
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))
         return {"status": "ok", "db": "connected"}
     except Exception as exc:
-        clean_exc = re.sub(r"://[^:]+:[^@]+@", "://***:***@", str(exc))
-        logger.error("Health DB check exception: %s", clean_exc)
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return {"status": "error", "db": "disconnected", "detail": "Database connection failed"}
+        clean_msg = re.sub(r"://[^:]+:[^@]+@", "://***:***@", str(exc))
+        logger.error("Health DB check failed: [%s] %s", exc.__class__.__name__, clean_msg)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "Database unavailable"},
+        )
 

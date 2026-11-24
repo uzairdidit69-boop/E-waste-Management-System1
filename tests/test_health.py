@@ -21,3 +21,17 @@ async def test_health_db_check(client: AsyncClient):
     assert resp.json()["status"] == "ok"
     assert resp.json()["db"] == "connected"
 
+
+@pytest.mark.asyncio
+async def test_health_db_check_failure(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """GET /api/health/db returns 503 and {'detail': 'Database unavailable'} on error."""
+    import app.main
+    def _mock_get_session_local():
+        raise RuntimeError("Simulated connection timeout")
+
+    monkeypatch.setattr(app.main, "get_session_local", _mock_get_session_local)
+    resp = await client.get("/api/health/db")
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Database unavailable"}
+
+
