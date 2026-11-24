@@ -4,6 +4,7 @@ from __future__ import annotations
 """Async SQLAlchemy engine and session factory for the E-Waste Management System."""
 
 import logging
+import re
 import urllib.parse
 from typing import Any
 from fastapi import HTTPException, status
@@ -15,11 +16,13 @@ from .config import settings
 
 logger = logging.getLogger("ecotrack")
 
+_URL_RE = re.compile(r"((?:postgres(?:ql)?(?:\+[a-z0-9_]+)?|sqlite(?:\+[a-z0-9_]+)?):\/\/[^\s\'\"`“”‘’]+)")
+
 
 def normalize_database_url(raw_url: str | None) -> tuple[str, dict[str, Any], type]:
     """Convert DB URL to asyncpg format and configure connect_args/poolclass.
 
-    - Reads DATABASE_URL, trims spaces, surrounding quotes, and common prefix artifacts.
+    - Reads DATABASE_URL, trims spaces, surrounding quotes, and CLI artifacts.
     - Converts postgres:// or postgresql:// to postgresql+asyncpg://.
     - Removes unsupported query parameters (sslmode, channel_binding, options) for asyncpg.
     - For Postgres passes connect_args={"ssl": "require", "statement_cache_size": 0}.
@@ -29,19 +32,11 @@ def normalize_database_url(raw_url: str | None) -> tuple[str, dict[str, Any], ty
         logger.warning("DATABASE_URL is empty; database operations will be unavailable")
         return "", {}, NullPool
 
-    url = raw_url.strip()
-    # Strip common copy-paste command prefixes
-    if url.startswith("export "):
-        url = url[7:].strip()
-    if url.startswith("DATABASE_URL="):
-        url = url[13:].strip()
-    elif url.startswith("DATABASE_URL ="):
-        url = url.split("=", 1)[1].strip()
-    if url.startswith("psql "):
-        url = url[5:].strip()
-
-    # Strip any enclosing quotes (ascii single/double, backticks, unicode smart quotes)
-    url = url.strip("'\"`“”‘’ \t\r\n")
+    match = _URL_RE.search(raw_url)
+    if match:
+        url = match.group(1).strip()
+    else:
+        url = raw_url.strip().strip("'\"`“”‘’ \t\r\n")
 
     if not url:
         return "", {}, NullPool

@@ -87,7 +87,8 @@ async def health_db_check():
         return {"status": "ok", "db": "connected"}
     except Exception as exc:
         clean_msg = re.sub(r"://[^:]+:[^@]+@", "://***:***@", str(exc))
-        logger.error("Health DB check failed: [%s] %s", exc.__class__.__name__, clean_msg)
+        raw_prefix = repr(settings.DATABASE_URL[:20]) if settings.DATABASE_URL else "None"
+        logger.error("Health DB check failed: [%s] %s (len=%d, raw_prefix=%s)", exc.__class__.__name__, clean_msg, len(settings.DATABASE_URL or ""), raw_prefix)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "Database unavailable"},
