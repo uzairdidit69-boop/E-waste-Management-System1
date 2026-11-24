@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/models/base.py
 """SQLAlchemy declarative base used by all models."""
 

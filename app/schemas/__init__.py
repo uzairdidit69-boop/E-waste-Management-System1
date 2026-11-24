@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/schemas/__init__.py
 from .users import UserCreate, UserRead, UserLogin, Token
 from .areas import AreaCreate, AreaRead

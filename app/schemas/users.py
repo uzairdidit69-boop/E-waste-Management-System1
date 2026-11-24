@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/schemas/users.py
 """Pydantic schemas for user registration, login, and responses."""
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for recycler profile extending a user.
 
 Recyclers are users who manage the processing facilities.

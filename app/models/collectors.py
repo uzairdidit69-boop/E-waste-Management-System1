@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for collector profile extending a user.
 
 Collectors are users who can be assigned to specific areas for waste collection.

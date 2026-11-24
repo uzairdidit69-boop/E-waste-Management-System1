@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/routers/users.py
 """Users router: read current user profile."""
 

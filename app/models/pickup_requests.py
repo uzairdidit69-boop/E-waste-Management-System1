@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for pickup requests.
 
 A requester creates a request for waste collection in a specific area.

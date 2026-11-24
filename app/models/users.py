@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for users of the E‑waste platform.
 
 Roles are defined as an Enum matching the specification (requester, collector, recycler, admin).

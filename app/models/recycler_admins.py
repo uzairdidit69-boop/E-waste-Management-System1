@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model linking a site admin (user) to a recycler.
 
 Each entry represents an admin user responsible for a particular recycler.

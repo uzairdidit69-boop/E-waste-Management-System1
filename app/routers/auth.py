@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/routers/auth.py
 """Authentication router: register and login endpoints."""
 

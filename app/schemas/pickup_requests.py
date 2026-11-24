@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/schemas/pickup_requests.py
 """Pydantic schemas for pickup requests."""
 

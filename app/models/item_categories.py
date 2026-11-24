@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for item categories.
 
 Categories classify waste items (e.g., "Electronics", "Batteries").

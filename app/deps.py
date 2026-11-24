@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/deps.py
 """Common FastAPI dependencies.
 

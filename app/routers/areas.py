@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/routers/areas.py
 """Areas router: CRUD for geographical areas."""
 

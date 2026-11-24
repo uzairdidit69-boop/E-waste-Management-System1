@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy association table linking collectors to the areas they serve.
 
 A collector can serve multiple areas and an area can have multiple collectors.

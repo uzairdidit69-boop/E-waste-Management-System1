@@ -1,21 +1,18 @@
-from __future__ import annotations
-
 # app/main.py
 """FastAPI application entry point for the E-Waste Management System."""
 
 import logging
 import re
 import traceback
-from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
-from .db import get_db, get_session_local
+from .db import get_session_local
 from .routers import areas, auth, pickup_requests, users
 
 logger = logging.getLogger("ecotrack")

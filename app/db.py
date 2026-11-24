@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # app/db.py
 """Async SQLAlchemy engine and session factory for the E-Waste Management System."""
 
@@ -45,6 +43,11 @@ def normalize_database_url(raw_url: str | None) -> tuple[str, dict[str, Any], ty
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+    # Validate that Postgres URLs contain at least a host/netloc
+    if url.startswith("postgresql+asyncpg://") and not urllib.parse.urlsplit(url).netloc:
+        logger.error("DATABASE_URL is incomplete or a bare prefix ('%s'). Full connection URI required.", url)
+        return "", {}, NullPool
 
     connect_args: dict[str, Any] = {}
     if "asyncpg" in url:

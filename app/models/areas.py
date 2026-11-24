@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for geographical areas used throughout the system.
 
 Each area represents a city / district / region where waste collection can occur.

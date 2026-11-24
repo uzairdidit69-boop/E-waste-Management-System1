@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLAlchemy model for requester profile extending a user.
 
 Each requester is a normal user that can create pickup requests.
